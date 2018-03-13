@@ -51,4 +51,8 @@ PP.subset <- operating[period.operating == 4*(years[length(years)] - years[1] + 
 setkey(emissions,PP)
 emissions.subset <- emissions[PP.subset]
 
+
+emissions.subset <- emissions.subset[PP.region %in% regions,]
+emissions.subset <- emissions.subset[year %in% years]
+
 write.csv(emissions.subset, file = "data/emissions_subset_2005-2010.csv")

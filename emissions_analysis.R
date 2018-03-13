@@ -48,15 +48,17 @@ operating <- operating_annual[year.new %in% years  , list(period.operating = sum
 #Find operating all seasons
 PP.subset <- operating[period.operating == 4*(years[length(years)] - years[1] + 1), .(PP)]
 
+setkey(emissions,PP)
+emissions.subset <- emissions[PP.subset]
+emissions.subset <- emissions.subset[PP.region %in% regions,]
+emissions.subset <- emissions.subset[year %in% years]
+
 #write.csv(PP.subset, file = "data/paper3powerplants.csv")
 
 
 #-----------------------------plots for paper----------------------------------------------------#
 
-setkey(emissions,PP)
-emissions.subset <- emissions[PP.subset]
-emissions.subset <- emissions.subset[PP.region %in% regions,]
-emissions.subset <- emissions.subset[year %in% years]
+
 
 PP.summary <- emissions.subset[ , list(days.operating = sum(SO2 > 0, na.rm = TRUE),
                                        totalSO2 = sum(SO2, na.rm = TRUE),
