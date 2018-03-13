@@ -1,14 +1,23 @@
 #Data analysis for paper 3
 # determines subset of monitors to perfrom analysis on.
 rm(list=ls())
-setwd("/nfs/nsaph_ci3/users/ci3_kcummiskey/paper3")
+
 
 library(data.table)
+library(grid)
+library(gridExtra)
+library(ggplot2)
+library(viridis)
+library(xtable)
 
 regions <- c("IndustrialMidwest", "Northeast", "Southeast")
 
 years <- 2005:2010
 
+#----------------------------get monitor data for analysis----------------------------------------------------#
+
+PM.subset <- fread(file = "data/PM_subset_2005_2010.csv")[ , V1 := NULL]
+PM.subset[ , date := as.Date(date)]
 
 
 #----------------------------Daily PM Plot----------------------------------------------------#
@@ -44,7 +53,8 @@ ggplot(PM_annual_region, aes(x = year, y = annualPM, linetype = receptor.region)
 dev.off()
 
 
-region_summary <- monitor.summary[ year == 2010 & Monitor %in% monitor.subset$Monitor, list(n = .N), by = "receptor.region"]
+
+region_summary <- PM.subset[ , length(unique(Monitor)), by = "receptor.region"]
 
 sink(file = "../paper3_overleaf/tables/monitors.tex")
 print(xtable(region_summary, caption = "Number of monitors by region"), 
