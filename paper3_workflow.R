@@ -8,9 +8,14 @@ library(directlabels)
 library(ggplot2)
 library(viridis)
 
+source(file = "paper3_functions.R")
+source(file = "../emissionsNetworks/R/windrosePlots.R")
+regions <- c("IndustrialMidwest", "Northeast", "Southeast")
+years <- 2005:2010
 #---------------------------------load edges------------------------------#
 
-edges
+edges <- fread(file = "data/edge_subset2005_2010.csv")[ , V1:= NULL]
+setkey(edges, Monitor, PP)
 
 #---------------------------------degree analysis------------------------------#
 
@@ -37,7 +42,7 @@ season.plots <- lapply(c("winter","spring","summer","fall"), function(x, degree)
       axis.title.y = element_text(size = 10),
       plot.title = element_text(size = 10, hjust = 0.5)) +
     ylim(0,60) + 
-    labs(y = "monitor degree", title = x)
+    labs(y = "degree", title = x)
   return(plot)
 }, degree = season.degree)
 
@@ -46,12 +51,12 @@ season.plots <- lapply(season.plots, function(x) x + theme(legend.position = "no
 season.plots <- do.call("arrangeGrob", c(season.plots, ncol = 2))
 blank <- rectGrob(gp = gpar(col = "white"))
 
-pdf(file = "../paper3_overleaf/figures/monitor_degree.pdf", width = 6.5, height = 4)
-grid.arrange(season.plots, mylegend,  heights = c(0.8,0.2), nrow = 2)
+pdf(file = "../paper3_overleaf/figures/monitor_degree.pdf", width = 6.5, height = 3.5)
+grid.arrange(season.plots, mylegend,  heights = c(0.9,0.1), nrow = 2)
 dev.off()
 
 # powerplant degree
-PP.degree <- edges[ PP.region %in% PP.regions , list(degree = sum(edge, na.rm = TRUE),
+PP.degree <- edges[ PP.region %in% regions , list(degree = sum(edge, na.rm = TRUE),
                                 season = unique(season),
                                 year = unique(year)), 
                         by = c("date","PP","PP.region")]
@@ -73,7 +78,7 @@ season.plots <- lapply(c("winter","spring","summer","fall"), function(x, degree)
       axis.title.y = element_text(size = 10),
       plot.title = element_text(size = 10, hjust = 0.5)) +
     ylim(0,60) + 
-    labs(y = "pwr plt degree", title = x)
+    labs(y = "degree", title = x)
   return(plot)
 }, degree = season.degree)
 
@@ -82,8 +87,8 @@ season.plots <- lapply(season.plots, function(x) x + theme(legend.position = "no
 season.plots <- do.call("arrangeGrob", c(season.plots, ncol = 2))
 blank <- rectGrob(gp = gpar(col = "white"))
 
-pdf(file = "../paper3_overleaf/figures/powerplant_degree.pdf", width = 6.5, height = 4)
-grid.arrange(season.plots, mylegend,  heights = c(0.8,0.2), nrow = 2)
+pdf(file = "../paper3_overleaf/figures/powerplant_degree.pdf", width = 6.5, height = 3.5)
+grid.arrange(season.plots, mylegend,  heights = c(0.9,0.1), nrow = 2)
 dev.off()
 
 
@@ -92,8 +97,7 @@ year.season <- expand.grid( c("winter","spring","summer","fall"),years)
 year.season <- data.frame(year.season)
 colnames(year.season) <- c("season","year")
 
-lapply(PP.regions, function(y){
-  y = "IndustrialMidwest"
+lapply(regions, function(y){
   windrose.plots <- lapply(1:nrow(year.season), function(x, year.season, region){
     p <- plotPairCounts(edges[year == year.season[x,2] & season == year.season[x,1] & edge == 1, ], 
                         region = region,
@@ -103,15 +107,16 @@ lapply(PP.regions, function(y){
   }, year.season = year.season, region = y)
   
   mylegend <- g_legend(windrose.plots[[1]] + theme(legend.position = "bottom")) 
-  windrose.plots <- lapply(windrose.plots, function(x) x + expand_limits(y = c(0,1000)) + theme(plot.title = element_blank()))
+  lim2 <- ifelse(y == "IndustrialMidwest",1000, ifelse(y == "Northeast", 750, 750))
+  windrose.plots <- lapply(windrose.plots, function(x) x + expand_limits(y = c(0,lim2)) + theme(plot.title = element_blank()))
   windrose.plots <- do.call("arrangeGrob", c(windrose.plots, ncol = 4) )
   season.labels <- arrangeGrob(
-                    textGrob(label = "winter", gp = gpar(fontsize = 12)),
-                    textGrob(label = "spring", gp = gpar(fontsize = 12)),
-                    textGrob(label = "summer", gp = gpar(fontsize = 12)),
-                    textGrob(label = "fall", gp = gpar(fontsize = 12)),
+                    textGrob(label = "winter", gp = gpar(fontsize = 10)),
+                    textGrob(label = "spring", gp = gpar(fontsize = 10)),
+                    textGrob(label = "summer", gp = gpar(fontsize = 10)),
+                    textGrob(label = "fall", gp = gpar(fontsize = 10)),
                     ncol = 4)
-  year.labels <- do.call("arrangeGrob", c(lapply(years, function(x) textGrob(label = x, gp = gpar(fontsize = 12))), ncol = 1))
+  year.labels <- do.call("arrangeGrob", c(lapply(years, function(x) textGrob(label = x, gp = gpar(fontsize = 10))), ncol = 1))
   blank <- rectGrob(gp = gpar(col = "white"))
   
   main <- arrangeGrob(blank, season.labels, year.labels, windrose.plots,
@@ -119,9 +124,13 @@ lapply(PP.regions, function(y){
                widths = c(0.10,0.90),
                layout_matrix = rbind(c(1,2),c(3,4)),
                ncol = 2)
-  mylegend <- arrangeGrob(mylegend, ncol = 5)
+  allpairs <- plotPairCounts(edges[year == 2005 & season == "winter",],
+                             region = y,
+                             center = "powerplants")
+  allpairs <- arrangeGrob(textGrob(label = "All pairs", gp = gpar(fontsize = 10)), allpairs, ncol = 1, heights = c(0.05,0.95))
+  
   pdf(file = paste("../paper3_overleaf/figures/windrose_",y,".pdf",sep = ""), height = 8, width = 6.5)
-    grid.arrange(mylegend)
+    grid.arrange(allpairs,main, mylegend, ncol = 1, heights = c(0.2,0.75, 0.05))
   dev.off()
 })
 
