@@ -66,7 +66,9 @@ dev.off()
 region_summary <- PP.summary[ year ==2005 , list(n = .N), by = "PP.region"]
 
 sink(file = "../paper3_overleaf/tables/powerplants.tex")
-print(xtable(region_summary, caption = "Number of coal power plants by region"), 
+print(xtable(region_summary, 
+             caption = "Number of coal power plants by region",
+             label = "tab:powerplants"), 
       include.rownames = FALSE, 
       include.colnames = FALSE,
       hline.after = NULL)

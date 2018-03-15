@@ -48,7 +48,8 @@ ggplot(PM_annual_region, aes(x = year, y = annualPM, linetype = receptor.region)
   ylab("PM2.5") +
   theme(legend.position = "bottom", 
         legend.direction = "horizontal", 
-        legend.title = element_blank()) +
+        legend.title = element_blank(),
+        axis.title.x = element_blank()) +
   expand_limits(y = 0)
 dev.off()
 
@@ -57,7 +58,9 @@ dev.off()
 region_summary <- PM.subset[ , length(unique(Monitor)), by = "receptor.region"]
 
 sink(file = "../paper3_overleaf/tables/monitors.tex")
-print(xtable(region_summary, caption = "Number of monitors by region"), 
+print(xtable(region_summary, 
+             caption = "Number of monitors by region",
+             label = "tab:monitors"), 
       include.rownames = FALSE, 
       include.colnames = FALSE,
       hline.after = NULL)

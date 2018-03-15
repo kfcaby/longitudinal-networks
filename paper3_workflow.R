@@ -12,6 +12,7 @@ source(file = "paper3_functions.R")
 source(file = "../emissionsNetworks/R/windrosePlots.R")
 regions <- c("IndustrialMidwest", "Northeast", "Southeast")
 years <- 2005:2010
+
 #---------------------------------load edges------------------------------#
 
 edges <- fread(file = "data/edge_subset2005_2010.csv")[ , V1:= NULL]
@@ -19,7 +20,10 @@ setkey(edges, Monitor, PP)
 
 #---------------------------------degree analysis------------------------------#
 
-# monitor degree
+
+
+#MONITORS DEGREE
+
 monitor.degree <- edges[ , list(degree = sum(edge, na.rm = TRUE),
                                 season = unique(season),
                                 year = unique(year)), 
@@ -55,7 +59,86 @@ pdf(file = "../paper3_overleaf/figures/monitor_degree.pdf", width = 6.5, height 
 grid.arrange(season.plots, mylegend,  heights = c(0.9,0.1), nrow = 2)
 dev.off()
 
-# powerplant degree
+# monitor degree year-to-year correlation by season
+years.corr <- cbind(2005:2009,2006:2010)
+params <- cbind(rep(c("winter", "spring", "summer", "fall"),3), unlist(lapply(regions, rep, 4)))
+setkey(monitor.degree, Monitor)
+monitor.degree.cor <- 
+  lapply(1:12, function(y, parameters)
+    lapply(1:5, function(x, degree, years, season.p, region){
+      correlation = cor(degree[year == years[x,1] & receptor.region == region & season == season.p,]$degree,
+                        degree[year == years[x,2] & receptor.region == region & season == season.p,]$degree,
+                        method = "spearman", use = "pairwise.complete.obs")
+      correlation = round(correlation,3)
+      return(data.table(year = years[x,2], season = season.p, receptor.region = region, correlation = correlation))
+    }, degree = monitor.degree, years = years.corr, season.p = params[y,1], region = params[y,2]), parameters = params)
+monitor.degree.cor <- unlist(monitor.degree.cor, recursive = FALSE)
+monitor.degree.cor <- do.call("rbind", monitor.degree.cor)
+
+#plot monitor degree correlation by season
+season.plots <- lapply(c("winter","spring","summer","fall"), function(x, monitors){
+  plot <- ggplot(monitors[season == x,], aes(x = year, y = correlation, linetype = receptor.region)) + 
+    geom_line() +
+    theme_classic() +
+    theme(
+      legend.position = "bottom",
+      legend.direction = "horizontal",
+      legend.title = element_blank(),
+      axis.title.x = element_blank(),
+      axis.title.y = element_text(size = 10),
+      plot.title = element_text(size = 10, hjust = 0.5)) +
+    ylim(-1,1) + 
+    labs(y = "correlation", title = x)
+  return(plot)
+}, monitors = monitor.degree.cor)
+
+mylegend <- g_legend(season.plots[[1]])
+season.plots <- lapply(season.plots, function(x) x + theme(legend.position = "none"))
+season.plots <- do.call("arrangeGrob", c(season.plots, ncol = 2))
+blank <- rectGrob(gp = gpar(col = "white"))
+
+pdf(file = "../paper3_overleaf/figures/monitor_degree_correlation.pdf", width = 6.5, height = 3.5)
+grid.arrange(season.plots, mylegend,  heights = c(0.9,0.1), nrow = 2)
+dev.off()
+
+#monitor degree season to season correlation
+setkey(monitor.degree, date)
+dates <- unique(monitor.degree$date)
+dates <- cbind(dates[-length(dates)], dates[-1])
+
+monitor.degree.cor2 <- lapply(regions, function(y)
+  lapply(1:nrow(dates), function(x, dates, degree, region.p){
+    correlation <- cor(degree[date == dates[x,1] & receptor.region == region.p, ]$degree,
+                       degree[date == dates[x,2] & receptor.region == region.p, ]$degree,
+                       method = "spearman",
+                       use = "pairwise.complete.obs")
+    return(data.table(date = dates[x,2], region = region.p, correlation = correlation))
+  }, dates = dates, degree = monitor.degree, region.p = y)
+)
+monitor.degree.cor2 <- unlist(monitor.degree.cor2, recursive = FALSE)
+monitor.degree.cor2 <- do.call("rbind", monitor.degree.cor2)
+
+cor.plot <- ggplot(monitor.degree.cor2, aes(x = as.Date(date), y = correlation, linetype = region)) + 
+  geom_line() +
+  theme_classic() +
+  theme(
+    legend.position = "bottom",
+    legend.direction = "horizontal",
+    legend.title = element_blank(),
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 10),
+    plot.title = element_blank()) +
+  ylim(-1,1) + 
+  labs(y = "correlation")
+
+pdf(file = "../paper3_overleaf/figures/monitor_degree_correlation2.pdf", width = 6.5, height = 2)
+cor.plot
+dev.off()
+
+
+
+# POWERPLANT DEGREE
+
 PP.degree <- edges[ PP.region %in% regions , list(degree = sum(edge, na.rm = TRUE),
                                 season = unique(season),
                                 year = unique(year)), 
@@ -93,6 +176,8 @@ dev.off()
 
 
 #-----------windrose plots by region, season, and year-----------------------------------------------#
+
+#edge counts
 year.season <- expand.grid( c("winter","spring","summer","fall"),years)
 year.season <- data.frame(year.season)
 colnames(year.season) <- c("season","year")
@@ -134,100 +219,40 @@ lapply(regions, function(y){
   dev.off()
 })
 
-
-
-
-
-
-#plot all pairs ~ note this stays the same year to year for a fixed set of monitors and powerplants
-allpairs <- lapply(c("IndustrialMidwest", "Northeast", "Southeast"),
-                   function(x, monitors, powerplants, path){
-                     edges <- import_edges2(2003,path)
-                     edges <- edges[Monitor %in% monitors & PP %in% powerplants,]
-                     return(plotPairCounts(edges, regions = x, center = "powerplants", title = x))
-                   }, monitors = monitor.subset, powerplants = PP.subset, path = path)
-#pdf(file = "resultsPaper3/allpairs.pdf", height = 3, width = 6.5)
-do.call("grid.arrange", c(allpairs, ncol = 3))
-#dev.off()
-
-#all edges
-plots <- lapply(years, function(x, monitors = NULL, powerplants = NULL, path) {
-  edges <- import_edges2(x, path)
-  if(!is.null(monitors)){
-    edges <- edges[Monitor %in% monitors,]
-  }
-  if(!is.null(powerplants)){
-    edges <- edges[PP %in% powerplants]
-  }
-  plotPairCounts(edges[edge == 1,], regions = "Northeast", center = "powerplants", title = x) 
-}, monitors =monitor.subset, powerplant = PP.subset, path = path)
-do.call("grid.arrange", c(plots, ncol = 4))
-
 #edge probs
-plots <- lapply(years, function(x, monitors = NULL, powerplants = NULL, path, region) {
-  edges <- import_edges2(x, path)
-  if(!is.null(monitors)){
-    edges <- edges[Monitor %in% monitors,]
-  }
-  if(!is.null(powerplants)){
-    edges <- edges[PP %in% powerplants]
-  }
-  year <- textGrob(label = x, gp = gpar(fontsize = 12))
-  p1 <- plotEdgeProbs(edges[distance < 250,], regions = region, center = "powerplants", title = "") 
-  p2 <- plotEdgeProbs(edges[distance > 250 & distance < 500,], regions = region, center = "powerplants", title = "") 
-  p3 <- plotEdgeProbs(edges[distance > 500 & distance < 750,], regions = region, center = "powerplants", title = "") 
-  p4 <- plotEdgeProbs(edges[distance > 750 & distance < 1000,], regions = region, center = "powerplants", title = "") 
-  return(list(year,p1,p2,p3,p4))
-}, monitors = monitor.subset, powerplant = PP.subset, path = path, region = "Northeast")
-
-distances <- list(textGrob(label = "", gp = gpar(fontsize = 12)),
-                  textGrob(label = "0-250km", gp = gpar(fontsize = 12)),
-                  textGrob(label = "250-500km", gp = gpar(fontsize = 12)),
-                  textGrob(label = "500-750km", gp = gpar(fontsize = 12)),
-                  textGrob(label = "750-1000km", gp = gpar(fontsize = 12)))
-plots2 <- c(distances, unlist(plots, recursive = FALSE))
-pdf(file = "resultsPaper3/NE.pdf", height = 9, width = 6.5)
-do.call("grid.arrange", c(plots2,  ncol = 5))
-dev.off()
-
-
-edges <- lapply(2003:2004, function(x, path) {
-  import_edges2(x, path)[ , .(Monitor, PP, edge, distance, bearing, PP.region)]
-}, path = path)
-edges <- do.call("rbind",edges)
-edges <- edges[Monitor %in% monitor.subset & PP %in% PP.subset, ]
-
-p = list()
-region = "IndustrialMidwest"
-p[[1]] <- textGrob(label = "Industrial\nMidwest", gp = gpar(fontsize = 12))
-p[[2]] <- plotEdgeProbs(edges[distance < 250,], regions = region, center = "powerplants", title = "") 
-p[[3]] <- plotEdgeProbs(edges[distance > 250 & distance < 500,], regions = region, center = "powerplants", title = "") 
-p[[4]] <- plotEdgeProbs(edges[distance > 500 & distance < 750,], regions = region, center = "powerplants", title = "") 
-p[[5]] <- plotEdgeProbs(edges[distance > 750 & distance < 1000,], regions = region, center = "powerplants", title = "")
-region = "Northeast"
-p[[6]] <- textGrob(label = "Northeast", gp = gpar(fontsize = 12))
-p[[7]] <- plotEdgeProbs(edges[distance < 250,], regions = region, center = "powerplants", title = "") 
-p[[8]] <- plotEdgeProbs(edges[distance > 250 & distance < 500,], regions = region, center = "powerplants", title = "") 
-p[[9]] <- plotEdgeProbs(edges[distance > 500 & distance < 750,], regions = region, center = "powerplants", title = "") 
-p[[10]] <- plotEdgeProbs(edges[distance > 750 & distance < 1000,], regions = region, center = "powerplants", title = "")
-region = "Southeast"
-p[[11]] <- textGrob(label = "Southeast", gp = gpar(fontsize = 12))
-p[[12]] <- plotEdgeProbs(edges[distance < 250,], regions = region, center = "powerplants", title = "") 
-p[[13]] <- plotEdgeProbs(edges[distance > 250 & distance < 500,], regions = region, center = "powerplants", title = "") 
-p[[14]] <- plotEdgeProbs(edges[distance > 500 & distance < 750,], regions = region, center = "powerplants", title = "") 
-p[[15]] <- plotEdgeProbs(edges[distance > 750 & distance < 1000,], regions = region, center = "powerplants", title = "")
+lapply(regions, function(y){
+  windrose.plots <- lapply(1:nrow(year.season), function(x, year.season, region){
+    p <- plotEdgeProbs_noDistance(edges[year == year.season[x,2] & season == year.season[x,1] & distance < 1000, ], 
+                        region = region,
+                        title = paste(year.season[x,1],year.season[x,2]),
+                        center = "powerplants")
+    return(p)
+  }, year.season = year.season, region = y)
+  
+  #lim2 <- ifelse(y == "IndustrialMidwest",1000, ifelse(y == "Northeast", 750, 750))
+  windrose.plots <- lapply(windrose.plots, function(x) x + expand_limits(y = c(0,0.5)) + theme(plot.title = element_blank()))
+  windrose.plots <- do.call("arrangeGrob", c(windrose.plots, ncol = 4) )
+  season.labels <- arrangeGrob(
+    textGrob(label = "winter", gp = gpar(fontsize = 10)),
+    textGrob(label = "spring", gp = gpar(fontsize = 10)),
+    textGrob(label = "summer", gp = gpar(fontsize = 10)),
+    textGrob(label = "fall", gp = gpar(fontsize = 10)),
+    ncol = 4)
+  year.labels <- do.call("arrangeGrob", c(lapply(years, function(x) textGrob(label = x, gp = gpar(fontsize = 10))), ncol = 1))
+  blank <- rectGrob(gp = gpar(col = "white"))
+  
+  pdf(file = paste("../paper3_overleaf/figures/windrose_prob_",y,".pdf",sep = ""), height = 8, width = 6.5)
+  grid.arrange(blank, season.labels, year.labels, windrose.plots,
+              heights = c(0.05,0.95),
+              widths = c(0.10,0.90),
+              layout_matrix = rbind(c(1,2),c(3,4)),
+              ncol = 2)
+  dev.off()
+})
 
 
 
-pdf(file = "resultsPaper3/allyears.pdf", height = 4, width = 6.5)
-do.call("grid.arrange", c(p,  ncol = 5))
-dev.off()
-
-
-
-
-
-
+#EXTREME DAYS
 
 
 # Other visualizations of extreme PM days
@@ -256,50 +281,96 @@ grid.arrange(p1,p2, ncol = 1)
 
 
 
+
+
+
+
 #-----------Look at concordance of edges between power plants that--------------#
+setkey(edges, Monitor, PP)
+years.corr <- cbind(2005:2009,2006:2010)
+params <- cbind(rep(c("winter", "spring", "summer", "fall"),3), unlist(lapply(regions, rep, 4)))
 
-#NOTE: In this section, analysis is limited to the subset of monitors and power plants identified above
+concordance <- lapply(1:nrow(params), function(y, parameters) 
+  lapply(1:5, function(x, edges.p, years.p, season.p, region.p) {
+    edge1 <- edges.p[receptor.region == region.p & season == season.p & year == years.p[x,1] & distance < 1000,]$edge
+    edge2 <- edges.p[receptor.region == region.p & season == season.p & year == years.p[x,2] & distance < 1000,]$edge
+    n.agree <- sum(edge1 == edge2, na.rm = TRUE)
+    n.disagree <- sum(edge1 != edge2, na.rm = TRUE)
+    n.total <- n.agree + n.disagree
+    pos.agree <- sum(edge1 == 1 & edge2 == 1, na.rm = TRUE)
+    neg.agree <- sum(edge1 == 0 & edge2 == 0, na.rm = TRUE)
+    
+    data.table(receptor.region = region.p,
+                      season = season.p,
+                      year = years.p[x,2],
+                concordance = n.agree/n.total, 
+                pos.concordance = pos.agree/sum(edge1 == 1 & !is.na(edge2)),
+                neg.concordance = neg.agree/sum(edge1 == 0 & !is.na(edge2)),
+                edge_percent = sum(edge2, na.rm = TRUE)/sum(!is.na(edge2)))
+  }, edges.p = edges, years.p = years.corr, season.p = parameters[y,1], region.p = parameters[y,2]), parameters = params)
 
-#overall
-concordance <- getEdgeConcordance(monitor.subset, PP.subset, years, path)
-
-#by region
-concordance.region <- lapply(c("IndustrialMidwest","Northeast", "Southeast"),
-                             function(x, monitor.subset, PP.subset, years, path) {
-                               region.monitors <-unique(PM[Monitor %in% monitor.subset & receptor.region == x,]$Monitor)
-                               results <- getEdgeConcordance(region.monitors, PP.subset, years, path)
-                               results <- cbind(rep(x,nrow(results)), results)
-                               names(results)[1] <- "receptor.region"
-                               return(results)
-                             }, monitor.subset = monitor.subset, PP.subset = PP.subset,
-                             years = years, path = path)
-concordance.region <- do.call("rbind",concordance.region)
-
-#pdf(file = "resultsPaper3/degree_corr.pdf", height = 3, width = 6.5)
-ggplot(concordance.region, aes(x = year2, y = degree.rank.corr, linetype = receptor.region)) +
-  geom_line() + labs(y = "monitor degree correlation", x = "year") + 
-  theme_bw() +
-  theme(legend.position = "bottom", legend.direction = "horizontal", legend.title = element_blank())
-#dev.off()
-
-conc_long <- data.table(concordance.region)
-conc_long <- melt(conc_long[ ,.(receptor.region,year2,concordance,pos.perc,neg.perc)], 
-                  id.vars = c("receptor.region","year2"))
-#pdf(file = "resultsPaper3/concordance.pdf", height = 3, width = 6.5)
-ggplot(conc_long, aes(x = year2, y = value, linetype = receptor.region, color = variable)) +
-  geom_line() + labs(y = "", x = "year") + ylim(0,1) +
-  scale_color_viridis(discrete = TRUE, option = "magma", end = 0.75,
-                      guide = guide_legend(title = "concordance", title.position = "top"),
-                      labels = c("overall", "edges", "nonedges"))+
-  scale_linetype(guide = guide_legend(title = element_blank())) +
-  theme_bw() +
-  theme(legend.position = "bottom", legend.direction = "horizontal") 
-#dev.off()
-#-----------Look at annual edge percent---------------------------------------#
-
-edge.perc <- t(getEdgePercents(monitor.subset, PP.subset, years, path))
-edge.perc <- cbind(years, edge.perc)
+concordance <- do.call("rbind", unlist(concordance, recursive = FALSE))
 
 
+#plot concordance by season
+season.plots <- lapply(c("winter","spring","summer","fall"), function(x, concordance.p){
+  conc_long <- melt(concordance.p[season == x], id.vars = c("receptor.region", "season", "year"))
+  conc_long <- conc_long[variable != "edge_percent",]
+  plot <- ggplot(conc_long, aes(x = year, y = value, linetype = receptor.region, color = variable)) + 
+    geom_line() +
+    theme_classic() +
+    theme(
+      legend.position = "bottom",
+      legend.direction = "horizontal",
+      legend.title = element_blank(),
+      legend.text = element_text(size = 11),
+      axis.title.x = element_blank(),
+      axis.title.y = element_text(size = 10),
+      plot.title = element_text(size = 12, hjust = 0.5)) +
+    ylim(0,1) + 
+    scale_color_viridis(discrete = TRUE, option = "magma", end = 0.75,
+                        guide = guide_legend(title = element_blank()),
+                        labels = c("overall", "edges", "nonedges"))+
+    scale_linetype(guide = guide_legend(title = element_blank())) +
+    labs(y = "percent", title = x)
+  return(plot)
+}, concordance.p = concordance)
 
-#FIX list structure
+mylegend <- g_legend(season.plots[[1]])
+season.plots <- lapply(season.plots, function(x) x + theme(legend.position = "none"))
+season.plots <- do.call("arrangeGrob", c(season.plots, ncol = 2))
+blank <- rectGrob(gp = gpar(col = "white"))
+
+pdf(file = "../paper3_overleaf/figures/concordance.pdf", width = 6.5, height = 4)
+grid.arrange(season.plots, mylegend,  heights = c(0.9,0.1), nrow = 2)
+dev.off()
+
+
+#difference between positive concordance and edge percent
+concordance[ , pos.diff.perc := (pos.concordance - edge_percent)/edge_percent]
+season.plots <- lapply(c("winter","spring","summer","fall"), function(x, concordance.p){
+  plot <- ggplot(concordance.p[season == x], aes(x = year, y = pos.diff.perc, linetype = receptor.region)) +
+    geom_line() +
+    theme_classic() +
+    theme(
+      legend.position = "bottom",
+      legend.direction = "horizontal",
+      legend.title = element_blank(),
+      legend.text = element_text(size = 11),
+      axis.title.x = element_blank(),
+      axis.title.y = element_text(size = 10),
+      plot.title = element_text(size = 12, hjust = 0.5)) +
+    ylim(-1,1) +
+    labs(y = "percent", title = x)
+  return(plot)
+}, concordance.p = concordance)
+
+mylegend <- g_legend(season.plots[[1]])
+season.plots <- lapply(season.plots, function(x) x + theme(legend.position = "none"))
+season.plots <- do.call("arrangeGrob", c(season.plots, ncol = 2))
+blank <- rectGrob(gp = gpar(col = "white"))
+
+pdf(file = "../paper3_overleaf/figures/positive_diff.pdf", width = 6.5, height = 4)
+grid.arrange(season.plots, mylegend,  heights = c(0.9,0.1), nrow = 2)
+dev.off()
+
