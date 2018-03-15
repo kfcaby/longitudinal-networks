@@ -60,3 +60,28 @@ PM.subset <- PM[monitor.subset]
 setkey(PM.subset, Monitor)
 
 write.csv(PM.subset, file = "data/PM_subset_2005_2010.csv")
+
+#--------------perform same task for replaced PM--------------------------#
+
+PM.replaced <- fread(file = "/nfs/nsaph_ci3/users/ci3_kcummiskey/emissionsNetworks/data/daily.PMreplaced.csv")
+PM.replaced <- melt(PM.replaced, variable.name = "date", value.name = "PM25")
+names(PM.replaced)[1] <- "Monitor"
+setkey(PM.replaced,Monitor)
+PM.replaced$date = as.Date(PM.replaced$date)
+PM.replaced[ ,year := year(date)]
+PM.replaced[ , month := month(date)]
+
+#attach other information
+setkey(monitor.locations, ID)
+PM.replaced <- PM.replaced[monitor.locations]
+
+#only include regions specified above
+PM.replaced <- PM.replaced[receptor.region %in% regions,]
+
+#only include years specified above
+PM.replaced <- PM.replaced[year %in% years,]
+
+PM.replaced.subset <- PM.replaced[monitor.subset]
+setkey(PM.replaced.subset, Monitor)
+
+write.csv(PM.replaced.subset, file = "data/PMreplaced_subset_2005_2010.csv")
