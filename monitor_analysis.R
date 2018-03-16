@@ -32,7 +32,11 @@ pdf(file = "../paper3_overleaf/figures/dailyPM.pdf", height = 3, width = 6.5)
 ggplot(PM_daily_region, aes(x = date, y = dailyPM, color = receptor.region)) +
   geom_line() + scale_color_viridis(discrete = TRUE) +
   theme_classic() +
-  theme(legend.position = "bottom",  legend.title = element_blank())
+  theme(legend.position = "none",  
+        legend.title = element_blank(),
+        axis.title.x = element_blank(),
+        legend.text = element_text(size = 11)) +
+  ylim(0,55) + labs(y = "PM2.5")
 dev.off()
 
 
@@ -49,7 +53,8 @@ ggplot(PM_annual_region, aes(x = year, y = annualPM, linetype = receptor.region)
   theme(legend.position = "bottom", 
         legend.direction = "horizontal", 
         legend.title = element_blank(),
-        axis.title.x = element_blank()) +
+        axis.title.x = element_blank(),
+        legend.text = element_text(size = 11)) +
   expand_limits(y = 0)
 dev.off()
 
@@ -65,3 +70,32 @@ print(xtable(region_summary,
       include.colnames = FALSE,
       hline.after = NULL)
 sink()
+
+
+#----------------------------get monitor data for analysis----------------------------------------------------#
+
+PMreplaced.subset <- fread(file = "data/PMreplaced_subset_2005_2010.csv")[ , V1 := NULL]
+PMreplaced.subset[ , date := as.Date(date)]
+
+
+#----------------------------Daily PM Plot----------------------------------------------------#
+
+#daily PM at these monitors
+PMreplaced_daily_region <- PMreplaced.subset[ , list(dailyPM = mean(PM25, na.rm = TRUE),
+                                     year = unique(year)),
+                              by = c("date", "receptor.region")]
+
+
+pdf(file = "../paper3_overleaf/figures/dailyPMreplaced.pdf", height = 3, width = 6.5)
+ggplot(PMreplaced_daily_region, aes(x = date, y = dailyPM, color = receptor.region)) +
+  geom_line() + scale_color_viridis(discrete = TRUE) +
+  theme_classic() +
+  theme(legend.position = "bottom",  
+        legend.title = element_blank(),
+        axis.title.x = element_blank(),
+        legend.text = element_text(size = 11)) +
+  ylim(0,55) + labs(y = "PM2.5")
+dev.off()
+
+
+

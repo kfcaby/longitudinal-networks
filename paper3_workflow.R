@@ -66,18 +66,25 @@ setkey(monitor.degree, Monitor)
 monitor.degree.cor <- 
   lapply(1:12, function(y, parameters)
     lapply(1:5, function(x, degree, years, season.p, region){
-      correlation = cor(degree[year == years[x,1] & receptor.region == region & season == season.p,]$degree,
+      correlation.spearman = cor(degree[year == years[x,1] & receptor.region == region & season == season.p,]$degree,
                         degree[year == years[x,2] & receptor.region == region & season == season.p,]$degree,
                         method = "spearman", use = "pairwise.complete.obs")
-      correlation = round(correlation,3)
-      return(data.table(year = years[x,2], season = season.p, receptor.region = region, correlation = correlation))
+      correlation.spearman = round(correlation.spearman,3)
+      correlation.kendall = cor(degree[year == years[x,1] & receptor.region == region & season == season.p,]$degree,
+                                 degree[year == years[x,2] & receptor.region == region & season == season.p,]$degree,
+                                 method = "kendall", use = "pairwise.complete.obs")
+      correlation.kendall = round(correlation.kendall,3)
+      return(data.table(year = years[x,2], season = season.p, 
+                        receptor.region = region, 
+                        correlation.spearman = correlation.spearman,
+                        correlation.kendall = correlation.kendall))
     }, degree = monitor.degree, years = years.corr, season.p = params[y,1], region = params[y,2]), parameters = params)
 monitor.degree.cor <- unlist(monitor.degree.cor, recursive = FALSE)
 monitor.degree.cor <- do.call("rbind", monitor.degree.cor)
 
 #plot monitor degree correlation by season
 season.plots <- lapply(c("winter","spring","summer","fall"), function(x, monitors){
-  plot <- ggplot(monitors[season == x,], aes(x = year, y = correlation, linetype = receptor.region)) + 
+  plot <- ggplot(monitors[season == x,], aes(x = year, y = correlation.spearman, linetype = receptor.region)) + 
     geom_line() +
     theme_classic() +
     theme(
@@ -100,6 +107,36 @@ blank <- rectGrob(gp = gpar(col = "white"))
 pdf(file = "../paper3_overleaf/figures/monitor_degree_correlation.pdf", width = 6.5, height = 3.5)
 grid.arrange(season.plots, mylegend,  heights = c(0.9,0.1), nrow = 2)
 dev.off()
+
+#kendall correlation
+season.plots <- lapply(c("winter","spring","summer","fall"), function(x, monitors){
+  plot <- ggplot(monitors[season == x,], aes(x = year, y = correlation.kendall, linetype = receptor.region)) + 
+    geom_line() +
+    theme_classic() +
+    theme(
+      legend.position = "bottom",
+      legend.direction = "horizontal",
+      legend.title = element_blank(),
+      axis.title.x = element_blank(),
+      axis.title.y = element_text(size = 10),
+      plot.title = element_text(size = 10, hjust = 0.5)) +
+    ylim(-1,1) + 
+    labs(y = "correlation", title = x)
+  return(plot)
+}, monitors = monitor.degree.cor)
+
+mylegend <- g_legend(season.plots[[1]])
+season.plots <- lapply(season.plots, function(x) x + theme(legend.position = "none"))
+season.plots <- do.call("arrangeGrob", c(season.plots, ncol = 2))
+blank <- rectGrob(gp = gpar(col = "white"))
+
+pdf(file = "../paper3_overleaf/figures/monitor_degree_correlation_kendall.pdf", width = 6.5, height = 3.5)
+grid.arrange(season.plots, mylegend,  heights = c(0.9,0.1), nrow = 2)
+dev.off()
+
+
+
+
 
 #monitor degree season to season correlation
 setkey(monitor.degree, date)
@@ -332,7 +369,7 @@ season.plots <- lapply(c("winter","spring","summer","fall"), function(x, concord
                         guide = guide_legend(title = element_blank()),
                         labels = c("overall", "edges", "nonedges"))+
     scale_linetype(guide = guide_legend(title = element_blank())) +
-    labs(y = "percent", title = x)
+    labs(y = "concordance", title = x)
   return(plot)
 }, concordance.p = concordance)
 
@@ -349,7 +386,7 @@ dev.off()
 #difference between positive concordance and edge percent
 concordance[ , pos.diff.perc := (pos.concordance - edge_percent)/edge_percent]
 season.plots <- lapply(c("winter","spring","summer","fall"), function(x, concordance.p){
-  plot <- ggplot(concordance.p[season == x], aes(x = year, y = pos.diff.perc, linetype = receptor.region)) +
+  plot <- ggplot(concordance.p[season == x], aes(x = year, y = 100*pos.diff.perc, linetype = receptor.region)) +
     geom_line() +
     theme_classic() +
     theme(
@@ -360,7 +397,7 @@ season.plots <- lapply(c("winter","spring","summer","fall"), function(x, concord
       axis.title.x = element_blank(),
       axis.title.y = element_text(size = 10),
       plot.title = element_text(size = 12, hjust = 0.5)) +
-    ylim(-1,1) +
+    ylim(-100,100) +
     labs(y = "percent", title = x)
   return(plot)
 }, concordance.p = concordance)
