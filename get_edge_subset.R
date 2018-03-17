@@ -54,4 +54,4 @@ setkey(edges,season)
 edges <- dates[edges]
 edges[ , date := as.Date(paste(year,date, sep = ""))]
 
-write.csv(edges, "data/edge_subset2005_2010.csv")
+write.csv(edges, "data/edge_subset2005_2010_0316.csv")
